@@ -138,7 +138,7 @@ def main():
     sns.set_theme(style="whitegrid")
     axes = axes.flatten()
 
-    for i, (func, cfg) in enumerate([(rastrigin, FUNCTION_CONFIGS[rastrigin])]):
+    for i, (func, cfg) in enumerate(FUNCTION_CONFIGS.items()):
         print(f"=== Otimizando função {cfg['name']} ===")
 
         global_best_val = float('inf')
