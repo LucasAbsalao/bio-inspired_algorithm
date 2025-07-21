@@ -38,6 +38,7 @@ def schwefel(vector:np.ndarray, dimensions:int=None):
     
     return 418.9829*d - np.sum(vector*np.sin(np.sqrt(np.abs(vector))))
 
+<<<<<<< HEAD
 def rosenbrock(vector:np.ndarray, dimensions:int=None):
     if dimensions is not None and dimensions != vector.shape[0]:
         raise Exception("Number of dimensions is different from the vector shape")
@@ -48,3 +49,13 @@ def rosenbrock(vector:np.ndarray, dimensions:int=None):
     return somatorio
             
         
+=======
+def rosenbrock(vector: np.ndarray, dimensions: int = None):
+    if dimensions is not None and dimensions != vector.shape[0]:
+        raise Exception("Number of dimensions is different from the vector shape")
+
+    x = vector[:-1]
+    x_next = vector[1:]
+    return np.sum(100 * (x_next - x**2)**2 + (x - 1)**2)
+            
+>>>>>>> 416122a65632e9492c9b624c599118446aa858c3
