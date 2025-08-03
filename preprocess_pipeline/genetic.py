@@ -1,0 +1,173 @@
+import random
+import numpy as np
+
+class GeneticAlgorithm:
+    def __init__(self, population_size = 120, mutation_rate =0.08):
+
+        self.population_size = population_size
+        self.mutation_rate = mutation_rate
+
+        self.parameters = {
+            'median_filter':{'type':'binary','values':[0,1]},
+            'median_filter_size':{'type':'discrete','values':[3,5,7,9]},
+            'gaussian_filter':{'type':'binary','values':[0,1]},
+            'gaussian_sigma': {'type': 'continuous', 'min': 0, 'max': 1},
+            'segmentation_method': {'type': 'discrete', 'values': ['clustering', 'pca', 'adaptive', 'otsu']},
+            'dilation_size': {'type': 'discrete', 'values': [1, 2, 3, 4]},
+            'erosion_size': {'type': 'discrete', 'values': [1, 2, 3, 4]},
+            'color_space': {'type': 'discrete', 'values': ['RGB', 'NTSC', 'HSV', 'XYZ', 'YCBCR']},
+            'channel': {'type': 'discrete', 'values': ['all', 'first', 'second', 'third']},
+            'dilation_size2': {'type': 'discrete', 'values': [1, 2, 3, 4]},
+            'erosion_size2': {'type': 'discrete', 'values': [1, 2, 3, 4]}
+        }
+
+        self.gene_lengths = {}
+        total_length = 0
+        for param, config in self.parameters.items():
+            if config['type'] == 'binary':
+                length = 1
+            elif config['type'] == 'discrete':
+                length = int(np.ceil(np.log2(len(config['values']))))
+            elif config['type'] == 'continuous':
+                length = 4  
+            self.gene_lengths[param] = length
+            total_length += length
+        print(f"Total chromosome length: {total_length}")
+        self.chromosome_length = total_length
+        self.population = self.initialize_population()
+
+    def initialize_population(self):
+            return np.random.randint(2, size=(self.population_size, self.chromosome_length))
+    
+
+    def decode_chromosome(self, chromosome):
+        pos = 0
+        params = {}
+        
+        for param, config in self.parameters.items():
+            length = self.gene_lengths[param]
+            gene = chromosome[pos:pos+length]
+            int_value = int(''.join(map(str, gene)), 2)
+            
+            if config['type'] == 'binary':
+                params[param] = config['values'][int_value % len(config['values'])]
+            elif config['type'] == 'discrete':
+                max_val = 2**length - 1
+                scaled_value = int_value / max_val * (len(config['values']) - 1)
+                params[param] = config['values'][round(scaled_value)]
+            elif config['type'] == 'continuous':
+                max_val = 2**length - 1
+                params[param] = config['min'] + (int_value / max_val) * (config['max'] - config['min'])
+            
+            pos += length
+        
+        return params
+    
+
+    def selection(self, fitness_scores):
+        
+        probs = fitness_scores - np.min(fitness_scores)
+        if np.sum(probs) > 0:
+            probs = probs / np.sum(probs)
+        else:
+            probs = np.ones(len(fitness_scores)) / len(fitness_scores)
+        
+        parents_idx = np.random.choice(len(self.population), size=2, p=probs)
+        return self.population[parents_idx[0]], self.population[parents_idx[1]]
+    
+
+    def mutation(self, child):
+        for i in range(len(child)):
+            if np.random.rand() < self.mutation_rate:
+                child[i] = 1 - child[i]
+        return child
+    
+    def crossover(self, parent1, parent2):
+
+        if np.random.rand() < 0.3:
+                print("Crossover não realizado (chance menor que 50%)")
+                return parent1.copy(), parent2.copy()
+ 
+        size = len(parent1)
+        pt1, pt2 = sorted(np.random.choice(size, size=2, replace=False))
+        
+        print(f"\nPontos de crossover selecionados: {pt1} e {pt2}")
+        
+        child1 = np.concatenate([parent1[:pt1], parent2[pt1:pt2], parent1[pt2:]])
+        child2 = np.concatenate([parent2[:pt1], parent1[pt1:pt2], parent2[pt2:]])
+
+        print(f"Cromossomos pais: {parent1} e {parent2}")
+        print(f"Cromossomos filhos: {child1} e {child2}")
+        
+        return child1, child2
+    
+    def fitness_function(self, individual):
+        return np.sum(individual)  
+
+def main():
+    POPULATION_SIZE = 10
+    GENERATIONS = 5
+    MUTATION_RATE = 0.08
+    
+    ga = GeneticAlgorithm(population_size=POPULATION_SIZE, mutation_rate=MUTATION_RATE)
+    
+    print("="*60)
+    print(f"Iniciando Algoritmo Genético")
+    print(f"Tamanho da população: {POPULATION_SIZE}")
+    print(f"Número de gerações: {GENERATIONS}")
+    print(f"Taxa de mutação: {MUTATION_RATE}")
+    print("="*60)
+    
+    for generation in range(GENERATIONS):
+        print(f"\n{'='*30} Geração {generation+1} {'='*30}")
+        
+       
+        fitness_scores = [ga.fitness_function(ind) for ind in ga.population]
+        
+        print("\nAvaliação de Fitness:")
+        for i, (ind, fit) in enumerate(zip(ga.population, fitness_scores)):
+            print(f"Indivíduo {i+1}: {ind} | Fitness: {fit} ({(fit/ga.chromosome_length)*100:.1f}% de 1's)")
+        
+        # 2. Seleção dos melhores
+        best_idx = np.argmax(fitness_scores)
+        best_fitness = fitness_scores[best_idx]
+        best_individual = ga.population[best_idx]
+        
+        print(f"\nMelhor da geração: Indivíduo {best_idx+1}")
+        print(f"Fitness: {best_fitness} | Cromossomo: {best_individual}")
+        
+        
+        new_population = [best_individual.copy()] 
+        
+        while len(new_population) < POPULATION_SIZE:
+            parent1, parent2 = ga.selection(fitness_scores)
+            
+            child1, child2 = ga.crossover(parent1, parent2)
+            
+            child1 = ga.mutation(child1)
+            child2 = ga.mutation(child2)
+            
+            new_population.extend([child1, child2])
+        
+        ga.population = np.array(new_population[:POPULATION_SIZE])
+        
+        avg_fitness = np.mean(fitness_scores)
+        max_fitness = np.max(fitness_scores)
+        min_fitness = np.min(fitness_scores)
+        
+        print(f"\nEstatísticas da geração {generation+1}:")
+        print(f"Fitness médio: {avg_fitness:.2f}")
+        print(f"Fitness máximo: {max_fitness}")
+        print(f"Fitness mínimo: {min_fitness}")
+    
+    final_fitness = [ga.fitness_function(ind) for ind in ga.population]
+    best_idx = np.argmax(final_fitness)
+    
+    print("\n" + "="*60)
+    print("Resultado Final:")
+    print(f"Melhor indivíduo encontrado: {ga.population[best_idx]}")
+    print(f"Fitness do melhor: {final_fitness[best_idx]} ({(final_fitness[best_idx]/ga.chromosome_length)*100:.1f}% de 1's)")
+    print("="*60)
+
+if __name__ == "__main__":
+    main()
