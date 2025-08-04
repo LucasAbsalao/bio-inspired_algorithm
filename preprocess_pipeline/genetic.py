@@ -166,7 +166,7 @@ def main():
     POPULATION_SIZE = 10
     GENERATIONS = 15
     MUTATION_RATE = 0.08
-    METRIC = global_consistency_error
+    METRIC = rand_index
     dir_path = "dataset_folhas/"
     mask_paths = ["batata1_mask.png", "batata2_mask.png", "batata3_mask.png", "batata4_mask.png"]
     image_paths = ["batata1.JPG", "batata2.JPG", "batata3.JPG", "batata4.JPG"]
