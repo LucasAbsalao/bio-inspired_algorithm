@@ -147,19 +147,32 @@ def compare_otsu_pca(image, best_ind_metric, metric, ground_truth, dir):
         pca_value.append(metric(pca, cv2.imread(dir+ground_truth[i], cv2.IMREAD_GRAYSCALE)))
     
     df = pd.DataFrame({
-        'PRI': best_ind_metric + otsu_value + pca_value,
-        'Method': ['GA11'] * len(best_ind_metric) + ['Otsu'] * len(otsu_value) + ['PCA'] * len(pca_value)
+        'Coluna': image,
+        'vet_1': best_ind_metric,
+        'vet_2': otsu_value,
+        'vet_3': pca_value
     })
-    
-    plt.figure(figsize=(8, 5))
-    sns.boxplot(data=df, x='Method', y='PRI', palette='Set2')
-    sns.stripplot(data=df, x='Method', y='PRI', color='black', alpha=0.6, jitter=True)
 
-    plt.title('PRI por método de segmentação')
-    plt.ylabel('Probabilistic Rand Index (PRI)')
-    plt.xlabel('Método')
-    plt.grid(True)
+        # Criando o gráfico
+    plt.figure(figsize=(10, 6))
+    indices = range(len(best_ind_metric))
+
+    # Plotando cada vetor com seus respectivos marcadores
+    plt.plot(indices, df['vet_1'], 'kx', label='GA11', markersize=10)
+    plt.plot(indices, df['vet_2'], 'r*', label='OTSU', markersize=12)
+    plt.plot(indices, df['vet_3'], 'bo', label='PCA', markersize=8, fillstyle='none')
+
+    # Configurações do gráfico
+    plt.xticks(indices, image)
+    plt.xlabel('Colunas')
+    plt.ylabel('Valores')
+    plt.title('Comparação de Vetores por Coluna')
+    plt.grid(alpha=0.3)
+    plt.legend()
+
+    # Mostrar o gráfico
     plt.tight_layout()
+    plt.savefig("metricas.png")
     plt.show()
         
 def main():
@@ -168,11 +181,11 @@ def main():
     MUTATION_RATE = 0.08
     METRIC = rand_index
     dir_path = "dataset_folhas/"
-    mask_paths = ["batata1_mask.png", "batata2_mask.png", "batata3_mask.png", "batata4_mask.png"]
-    image_paths = ["batata1.JPG", "batata2.JPG", "batata3.JPG", "batata4.JPG"]
+    mask_paths = ["batata1_mask.png", "batata2_mask.png", "batata3_mask.png", "batata4_mask.png", "pimenta1_mask.png", "pimenta2_mask.png", "pimenta3_mask.png", "pimenta4_mask.png", "tomate1_mask.png", "tomate2_mask.png", "tomate3_mask.png", "tomate4_mask.png"]
+    image_paths = ["batata1.JPG", "batata2.JPG", "batata3.JPG", "batata4.JPG", "pimenta1.JPG", "pimenta2.JPG", "pimenta3.JPG", "pimenta4.JPG", "tomate1.JPG", "tomate2.JPG", "tomate3.JPG", "tomate4.JPG"]
     
     best_index_metrics = []
-    for ip in range(1):
+    for ip in range(len(mask_paths)):
         ga = GeneticAlgorithm(population_size=POPULATION_SIZE, mutation_rate=MUTATION_RATE, image_path=dir_path+image_paths[ip], mask_path=dir_path+mask_paths[ip], metric = METRIC)
         
         print("="*60)
