@@ -1,22 +1,26 @@
 import random
 import numpy as np
+from image_operations import *
+import cv2
 
 class GeneticAlgorithm:
-    def __init__(self, population_size = 120, mutation_rate =0.08):
+    def __init__(self, population_size = 120, mutation_rate = 0.08, image_path = None):
 
         self.population_size = population_size
         self.mutation_rate = mutation_rate
+        
+        self.image = cv2.imread(image_path)
 
         self.parameters = {
             'median_filter':{'type':'binary','values':[0,1]},
             'median_filter_size':{'type':'discrete','values':[3,5,7,9]},
             'gaussian_filter':{'type':'binary','values':[0,1]},
             'gaussian_sigma': {'type': 'continuous', 'min': 0, 'max': 1},
+            'color_space': {'type': 'discrete', 'values': ['RGB', 'LAB', 'HSV', 'XYZ', 'YCBCR']},
+            'channel': {'type': 'discrete', 'values': ['all', 'first', 'second', 'third']},
             'segmentation_method': {'type': 'discrete', 'values': ['clustering', 'pca', 'adaptive', 'otsu']},
             'dilation_size': {'type': 'discrete', 'values': [1, 2, 3, 4]},
             'erosion_size': {'type': 'discrete', 'values': [1, 2, 3, 4]},
-            'color_space': {'type': 'discrete', 'values': ['RGB', 'NTSC', 'HSV', 'XYZ', 'YCBCR']},
-            'channel': {'type': 'discrete', 'values': ['all', 'first', 'second', 'third']},
             'dilation_size2': {'type': 'discrete', 'values': [1, 2, 3, 4]},
             'erosion_size2': {'type': 'discrete', 'values': [1, 2, 3, 4]}
         }
@@ -24,6 +28,7 @@ class GeneticAlgorithm:
         self.gene_lengths = {}
         total_length = 0
         for param, config in self.parameters.items():
+            print(param)
             if config['type'] == 'binary':
                 length = 1
             elif config['type'] == 'discrete':
@@ -63,7 +68,25 @@ class GeneticAlgorithm:
         
         return params
     
-
+    def pipeline(self, chromosome):
+        params = self.decode_chromosome(chromosome)
+        
+        new_img = self.image.copy()
+        
+        if params['median_filter'] == 1:
+            new_img = median_blur(new_img, params['median_filter_size'])
+        elif params['gaussian_filter'] == 1:
+            new_img = gaussian_blur(new_img, params['gaussian_sigma'])
+        new_img = color_space(new_img, params['color_space'])
+        new_img = choose_channel(new_img, params['channel'])
+        new_img = segmentation(new_img, params['segmentation_method'])
+        new_img = dilate(new_img, params['dilation_size'])
+        new_img = erode(new_img, params['erosion_size'])
+        new_img = dilate(new_img, params['dilation_size2'])
+        new_img = erode(new_img, params['erosion_size2'])
+        
+        return new_img
+    
     def selection(self, fitness_scores):
         
         probs = fitness_scores - np.min(fitness_scores)
@@ -109,7 +132,7 @@ def main():
     GENERATIONS = 5
     MUTATION_RATE = 0.08
     
-    ga = GeneticAlgorithm(population_size=POPULATION_SIZE, mutation_rate=MUTATION_RATE)
+    ga = GeneticAlgorithm(population_size=POPULATION_SIZE, mutation_rate=MUTATION_RATE, image_path="leaf.jpg")
     
     print("="*60)
     print(f"Iniciando Algoritmo Genético")
@@ -163,11 +186,15 @@ def main():
     final_fitness = [ga.fitness_function(ind) for ind in ga.population]
     best_idx = np.argmax(final_fitness)
     
+    print(ga.decode_chromosome(ga.population[best_idx]))
     print("\n" + "="*60)
     print("Resultado Final:")
     print(f"Melhor indivíduo encontrado: {ga.population[best_idx]}")
     print(f"Fitness do melhor: {final_fitness[best_idx]} ({(final_fitness[best_idx]/ga.chromosome_length)*100:.1f}% de 1's)")
     print("="*60)
 
+    cv2.imshow("Pipeline", ga.pipeline(ga.population[best_idx]))
+    cv2.waitKey(0)
+    cv2.destroyWindow("Pipeline")
 if __name__ == "__main__":
     main()
