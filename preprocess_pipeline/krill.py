@@ -4,8 +4,6 @@ import numpy as np
 class Krill:
     def __init__(self, range_inf, range_sup, z_abs, f, scale = 5):
         self.f = f
-        self.z_abs = z_abs
-        self.scale = scale
         self.range_inf = range_inf
         self.range_sup = range_sup
         self.original_pos = np.array([random.uniform(range_inf, range_sup), random.uniform(range_inf, range_sup)])
@@ -26,14 +24,13 @@ class Krill:
             self.best_pos = self.original_pos
         
 class Swarm:
-    def __init__(self, size, limits, z_abs, f, max_iterations, scale = 5):
+    def __init__(self, size, limits, f, max_iterations):
         self.krills= []
         self.limits = limits
         self.size = size
         self.f = f
-        self.scale = scale
         for _ in range(size):
-            self.krills.append(Krill(-limits, limits, z_abs, f, scale))
+            self.krills.append(Krill(-limits, limits, f))
             
         self.kworst = np.inf
         self.kbest = -np.inf
@@ -116,11 +113,24 @@ class Swarm:
         Fi = self.foraging_motion(i, iteration).squeeze(0)
         Di = self.physical_diffusion()
         
-        
-        
-        
         delta = Ni + Fi + Di  
         delta_t = Ct + 0.5*(self.limits - (-self.limits))
         
         krill.original_pos += delta_t*delta
-        
+
+def fitness(individual):
+    return np.sum(individual)
+
+if __name__ == "__main__":
+    limits = 1
+    n_iteracoes=1000
+    f = fitness
+    swarm = Swarm(15, limits, f, n_iteracoes)
+    for i in swarm.krills:
+        print(i)
+    x=0
+    while x<n_iteracoes:
+        swarm.evaluate_fitness()
+        swarm.food_position()
+        for i in range(swarm.size):
+            swarm.change_position(i, x, 0.1)

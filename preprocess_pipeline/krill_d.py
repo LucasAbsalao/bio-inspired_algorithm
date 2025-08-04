@@ -4,36 +4,29 @@ from image_operations import *
 from metrics import *
 
 class Krill:
-    def __init__(self, range_inf, range_sup, z_abs, f,image=None):
-        self.f = f
-        self.z_abs = z_abs
+    def __init__(self, range_inf, range_sup, image=None, ground_truth = None, metric = None):
         self.range_inf = range_inf
         self.range_sup = range_sup
         self.image = image
-        self.original_pos = np.array([random.uniform(range_inf, range_sup), random.uniform(range_inf, range_sup)])
-        self.fitness = None
-        self.best_fitness = None
-        self.set_fitness()
-        self.Ni = 0
-        self.Fi = 0
-        self.Di = 0
-        self.best_pos = self.original_pos.copy()
+        self.ground_truth = ground_truth
+        self.metric = metric
+        #self.original_pos = np.array([random.uniform(range_inf, range_sup), random.uniform(range_inf, range_sup)])
+        self.gene_lengths = {}
 
         self.parameters = {
             'median_filter':{'type':'binary','values':[0,1]},
             'median_filter_size':{'type':'discrete','values':[3,5,7,9]},
             'gaussian_filter':{'type':'binary','values':[0,1]},
             'gaussian_sigma': {'type': 'continuous', 'min': 0, 'max': 1},
+            'color_space': {'type': 'discrete', 'values': ['RGB', 'LAB', 'HSV', 'XYZ', 'YCBCR']},
+            'channel': {'type': 'discrete', 'values': ['all', 'first', 'second', 'third']},
             'segmentation_method': {'type': 'discrete', 'values': ['clustering', 'pca', 'adaptive', 'otsu']},
             'dilation_size': {'type': 'discrete', 'values': [1, 2, 3, 4]},
             'erosion_size': {'type': 'discrete', 'values': [1, 2, 3, 4]},
-            'color_space': {'type': 'discrete', 'values': ['RGB', 'NTSC', 'HSV', 'XYZ', 'YCBCR']},
-            'channel': {'type': 'discrete', 'values': ['all', 'first', 'second', 'third']},
             'dilation_size2': {'type': 'discrete', 'values': [1, 2, 3, 4]},
             'erosion_size2': {'type': 'discrete', 'values': [1, 2, 3, 4]}
         }
 
-        self.gene_lengths = {}
         total_length = 0
         for param, config in self.parameters.items():
             if config['type'] == 'binary':
@@ -44,17 +37,33 @@ class Krill:
                 length = 4  
             self.gene_lengths[param] = length
             total_length += length
-        print(f"Total chromosome length: {total_length}")
+        #print(f"Total chromosome length: {total_length}")
         self.chromosome_length = total_length
+        self.chromosome = np.random.uniform(low=-1, high=1, size=self.chromosome_length)
+        self.binary = None
+        self.get_binary()
+
+        self.fitness = None
+        self.best_fitness = None
+
+        self.set_fitness()
+        self.Ni = 0
+        self.Fi = 0
+        self.Di = 0
+        self.best_chromosome = self.chromosome.copy()
 
 
-    def decode_chromosome(self, chromosome):
+    def __str__(self):
+        return str(self.chromosome)
+
+    def decode_chromosome(self):
         pos = 0
         params = {}
         
         for param, config in self.parameters.items():
             length = self.gene_lengths[param]
-            gene = chromosome[pos:pos+length]
+            gene = self.binary[pos:pos+length]
+            #print(self.binary)
             int_value = int(''.join(map(str, gene)), 2)
             
             if config['type'] == 'binary':
@@ -71,16 +80,24 @@ class Krill:
         
         return params
         
-    def set_fitness(self, individual):
-        return np.sum(individual)
-    
-    def initialize_population(self):
-            return np.random.randint(2, size=(self.population_size, self.chromosome_length))
-    
+    def set_fitness(self):
 
-    def pipeline(self, chromosome):
-        params = self.decode_chromosome(chromosome)
-        
+        image = self.pipeline()
+        if self.metric == rand_index:
+            ri = self.metric(image, self.ground_truth)
+        else:
+            ri = 1/(1+self.metric(image, self.ground_truth))
+        self.fitness = ri
+        #print(self.fitness)
+        if self.best_fitness is None:
+            self.best_fitness = self.fitness
+        if self.fitness > self.best_fitness:
+            self.best_fitness = self.fitness
+            self.best_chromsome = self.chromosome
+
+    def pipeline(self):
+        params = self.decode_chromosome()
+        #print(params)
         new_img = self.image.copy()
         
         if params['median_filter'] == 1:
@@ -96,41 +113,48 @@ class Krill:
         new_img = erode(new_img, params['erosion_size2'])
         
         return new_img
-        
+    
+    def get_binary(self):
+        def sigmoid(x):
+            return 1 / (1 + np.exp(-x))
+        prob_delta = sigmoid(self.chromosome)
+        self.binary = (np.random.uniform(size=self.chromosome.shape) > prob_delta).astype(int)
+
+
 class Swarm:
-    def __init__(self, size, limits, z_abs, f, max_iterations, population_size=10):
-        self.krills= []
+    def __init__(self, size, limits, max_iterations, population_size=10, image=None, image_path=None, mask_path=None, metric = None):
+        self.selfs= []
         self.limits = limits
         self.size = size
-        self.f = f
         self.population_size = population_size
 
+        self.image = cv2.imread(image_path)
+        self.ground_truth = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        self.metric = metric
+
+        self.krills = []
         for _ in range(size):
-            self.krills.append(Krill(-limits, limits, z_abs, f))
+            self.krills.append(Krill(-limits, limits, self.image, self.ground_truth, self.metric))
             
         self.kworst = np.inf
         self.kbest = -np.inf
         self.max_iterations = max_iterations
         self.food = 0
-
-
-    def initialize_population(self):
-            return np.random.randint(2, size=(self.population_size, self.chromosome_length))
     
     def evaluate_fitness(self):
         for krill in self.krills:
             krill.set_fitness()
-        self.kbest = min(k.fitness for k in self.krills)
-        self.kworst = max(k.fitness for k in self.krills)
+        self.kbest = max(k.fitness for k in self.krills)
+        self.kworst = min(k.fitness for k in self.krills)
         
         
     def ds(self, i):
-        positions = np.array([k.original_pos for k in self.krills])
-        return 1/(5*self.size) * np.sum(np.linalg.norm(self.krills[i].original_pos-positions, axis=1))
+        positions = np.array([k.chromosome for k in self.krills])
+        return 1/(5*self.size) * np.sum(np.linalg.norm(self.krills[i].chromosome-positions, axis=1))
     
     def get_neighbours(self, i):
-        positions = np.array([k.original_pos for k in self.krills])
-        distances = np.linalg.norm(self.krills[i].original_pos - positions, axis=1)
+        positions = np.array([k.chromosome for k in self.krills])
+        distances = np.linalg.norm(self.krills[i].chromosome - positions, axis=1)
         d = self.ds(i)
         return np.where((distances < d) & (np.arange(self.size) != i))[0]
     
@@ -145,16 +169,16 @@ class Swarm:
         neighbours = self.get_neighbours(i)
         if len(neighbours) == 0:
             return 0
-        positions = np.array([self.krills[j].original_pos for j in neighbours])
+        positions = np.array([self.krills[j].chromosome for j in neighbours])
         fitness = np.array([self.krills[j].fitness for j in neighbours])
-        return np.sum(self.kij(self.krills[i].fitness,fitness)[:, np.newaxis] * self.xij(self.krills[i].original_pos, positions))
+        return np.sum(self.kij(self.krills[i].fitness,fitness)[:, np.newaxis] * self.xij(self.krills[i].chromosome, positions))
         
         
     def alpha_target(self, i, iteration):
         cbest = 2 * (random.random() + iteration/self.max_iterations)
         best_ind = np.argmin([krill.fitness for krill in self.krills])
         
-        return cbest * self.kij(self.krills[i].fitness, self.krills[best_ind].fitness) * self.xij(self.krills[i].original_pos, self.krills[best_ind].original_pos)
+        return cbest * self.kij(self.krills[i].fitness, self.krills[best_ind].fitness) * self.xij(self.krills[i].chromosome, self.krills[best_ind].chromosome)
     
     
     def induced_motion(self, i, iteration, Nmax = 0.01, inertia_weight = 0.5):
@@ -165,9 +189,9 @@ class Swarm:
     
     def food_position(self):
         k = np.array([ki.fitness for ki in self.krills])
-        x = np.array([xi.original_pos for xi in self.krills])
+        x = np.array([xi.chromosome for xi in self.krills])
         self.food = np.sum(x/k[:,np.newaxis], axis=0)/(np.sum(1/k))
-        self.food_object.visualize_food(self.food)
+        #self.food_object.visualize_food(self.food)
     
     def foraging_motion(self, i, iteration, Vf = 0.02, inertia_weight = 0.5):
         beta_i = self.beta_food(i,iteration) + self.beta_best(i)     
@@ -177,43 +201,76 @@ class Swarm:
     
     def beta_food(self, i, iteration):
         cfood = 2*(1-iteration/self.max_iterations)
-        return cfood * self.kij(self.krills[i].fitness, self.f(*self.food)) * self.xij(self.krills[i].original_pos, self.food)
+        dummy = Krill(-self.limits, self.limits, self.image, self.ground_truth, self.metric)
+        dummy.chromosome = self.food
+        dummy.get_binary()
+        segmented = dummy.pipeline()
+    
+        similarity = self.metric(segmented, self.ground_truth)
+        return cfood * self.kij(self.krills[i].fitness, similarity) * self.xij(self.krills[i].chromosome, self.food)
     
     def beta_best(self, i):
-        return self.kij(self.krills[i].fitness, self.krills[i].best_fitness) * self.xij(self.krills[i].original_pos, self.krills[i].best_pos)
+        return self.kij(self.krills[i].fitness, self.krills[i].best_fitness) * self.xij(self.krills[i].chromosome, self.krills[i].best_chromosome)
     
     def physical_diffusion(self, Dmax=0.005):
-        self.Di = Dmax * (2 * np.random.rand(2) - 1)
-        return Dmax * (2 * np.random.rand(2) - 1)
+        self.Di = Dmax * (2 * np.random.rand(self.krills[0].chromosome_length) - 1)
+        return Dmax * (2 * np.random.rand(self.krills[0].chromosome_length) - 1)
     
     def change_position(self, i, iteration, Ct=1):
-            krill = self.krills[i]
+        krill = self.krills[i]
+        
+        Ni = self.induced_motion(i, iteration).squeeze(0)
+        Fi = self.foraging_motion(i, iteration).squeeze(0)
+        Di = self.physical_diffusion()
+        
+        delta = Ni + Fi + Di
+        delta_t = Ct + 0.5*(self.limits - (-self.limits)-1)
+        krill.chromosome += delta_t*delta
+
+        krill.get_binary()
+        
             
-            # Calcula os componentes do movimento
-            Ni = self.induced_motion(i, iteration).squeeze(0)
-            Fi = self.foraging_motion(i, iteration).squeeze(0)
-            Di = self.physical_diffusion()
-            
-            # Soma os componentes para obter a velocidade/direção
-            delta = Ni + Fi + Di
-            
-            # Aplica função sigmoide para transformar em probabilidade
-            def sigmoid(x):
-                return 1 / (1 + np.exp(-x))
-            
-            # Transforma cada componente do delta em probabilidade
-            prob_delta = sigmoid(delta) * 2 - 1  # Escala para [-1, 1]
-            
-            # Calcula o passo temporal
-            delta_t = Ct + 0.5*(self.limits - (-self.limits))
-            
-            # Atualiza a posição usando o delta probabilístico
-            krill.original_pos += delta_t * prob_delta
-            
-            # Garante que a posição está dentro dos limites
-            krill.original_pos = np.clip(krill.original_pos, -self.limits, self.limits)
-            
-            # Atualiza a visualização
-            krill.set_pos()
-                
-            
+
+if __name__ == "__main__":
+    METRIC = rand_index
+    dir_path = "dataset_folhas/"
+    mask_paths = ["batata1_mask.png", "batata2_mask.png", "batata3_mask.png", "batata4_mask.png",
+                "pimenta1_mask.png", "pimenta2_mask.png", "pimenta3_mask.png", "pimenta4_mask.png",
+                "tomate1_mask.png", "tomate2_mask.png", "tomate3_mask.png", "tomate4_mask.png"]
+    image_paths = ["batata1.JPG", "batata2.JPG", "batata3.JPG", "batata4.JPG",
+                "pimenta1.JPG", "pimenta2.JPG", "pimenta3.JPG", "pimenta4.JPG",
+                "tomate1.JPG", "tomate2.JPG", "tomate3.JPG", "tomate4.JPG"]
+    limits = 1
+    n_iteracoes = 10
+
+    # Lista para armazenar os melhores indivíduos de cada imagem
+    all_best_individuals = []
+
+    for ip in range(len(mask_paths) - 10):
+        swarm = Swarm(15, limits, n_iteracoes, population_size=10,
+                    image_path=dir_path + image_paths[ip],
+                    mask_path=dir_path + mask_paths[ip],
+                    metric=METRIC)
+
+        # Vetor para guardar o melhor fitness de cada iteração (opcional)
+        best_fitness_per_iteration = []
+
+        x = 0
+        while x < n_iteracoes:
+            swarm.evaluate_fitness()
+            swarm.food_position()
+
+            for i in range(swarm.size):
+                swarm.change_position(i, x, 0.1)
+
+            # Coleta do melhor indivíduo da iteração
+            best_krill = max(swarm.krills, key=lambda k: k.fitness)
+            best_fitness_per_iteration.append(best_krill.fitness)
+
+            x += 1
+
+        # Armazena o melhor indivíduo da última iteração
+        best_overall = max(swarm.krills, key=lambda k: k.fitness)
+        all_best_individuals.append(best_overall)
+
+        print(f"Melhor fitness da imagem {image_paths[ip]}: {best_overall.fitness}")

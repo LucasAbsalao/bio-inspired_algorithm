@@ -5,6 +5,7 @@ from metrics import *
 import pandas as pd
 import cv2
 import seaborn as sns
+from krill_d import *
 
 class GeneticAlgorithm:
     def __init__(self, population_size = 120, mutation_rate = 0.08, image_path = None, mask_path = None, metric = None):
@@ -118,13 +119,13 @@ class GeneticAlgorithm:
         size = len(parent1)
         pt1, pt2 = sorted(np.random.choice(size, size=2, replace=False))
         
-        print(f"\nPontos de crossover selecionados: {pt1} e {pt2}")
+        #print(f"\nPontos de crossover selecionados: {pt1} e {pt2}")
         
         child1 = np.concatenate([parent1[:pt1], parent2[pt1:pt2], parent1[pt2:]])
         child2 = np.concatenate([parent2[:pt1], parent1[pt1:pt2], parent2[pt2:]])
 
-        print(f"Cromossomos pais: {parent1} e {parent2}")
-        print(f"Cromossomos filhos: {child1} e {child2}")
+        #print(f"Cromossomos pais: {parent1} e {parent2}")
+        #print(f"Cromossomos filhos: {child1} e {child2}")
         
         return child1, child2
     
@@ -136,49 +137,54 @@ class GeneticAlgorithm:
             ri = 1/(1+self.metric(image, self.ground_truth))
         return ri 
 
-def compare_otsu_pca(image, best_ind_metric, metric, ground_truth, dir):
+def compare_otsu_pca(image, best_ind_metric, all_best, metric, ground_truth, dir):
     otsu_value = []
     pca_value = []
+
     for i in range(len(image)):
-        otsu = segmentation(cv2.imread(dir+image[i]), 'otsu')
-        pca = segmentation(cv2.imread(dir+image[i]), 'pca')
-        
-        otsu_value.append(metric(otsu, cv2.imread(dir+ground_truth[i], cv2.IMREAD_GRAYSCALE)))
-        pca_value.append(metric(pca, cv2.imread(dir+ground_truth[i], cv2.IMREAD_GRAYSCALE)))
-    
-    df = pd.DataFrame({
-        'Coluna': image,
-        'vet_1': best_ind_metric,
-        'vet_2': otsu_value,
-        'vet_3': pca_value
-    })
+        otsu = segmentation(cv2.imread(dir + image[i]), 'otsu')
+        pca = segmentation(cv2.imread(dir + image[i]), 'pca')
 
-        # Criando o gráfico
+        otsu_value.append(metric(otsu, cv2.imread(dir + ground_truth[i], cv2.IMREAD_GRAYSCALE)))
+        pca_value.append(metric(pca, cv2.imread(dir + ground_truth[i], cv2.IMREAD_GRAYSCALE)))
+
+    best_ind_metric = np.array(best_ind_metric)  # shape: (n_imagens, execuções)
+    all_best = np.array([[krill.fitness for krill in krill_list] for krill_list in all_best])  # shape: (n_imagens, execuções)
+
+    # Verifique tamanhos
+    #assert best_ind_metric.shape[0] == len(image), "Mismatch entre best_ind_metric e número de imagens"
+    #assert all_best.shape[0] == len(image), "Mismatch entre all_best e número de imagens"
+
     plt.figure(figsize=(10, 6))
-    indices = range(len(best_ind_metric))
+    indices = np.arange(len(image))
 
-    # Plotando cada vetor com seus respectivos marcadores
-    plt.plot(indices, df['vet_1'], 'kx', label='GA11', markersize=10)
-    plt.plot(indices, df['vet_2'], 'r*', label='OTSU', markersize=12)
-    plt.plot(indices, df['vet_3'], 'bo', label='PCA', markersize=8, fillstyle='none')
+    # Boxplot para GA
+    plt.boxplot(best_ind_metric.T, positions=indices - 0.2, widths=0.3,
+                patch_artist=True, boxprops=dict(facecolor='lightgray'), labels=[""]*len(indices))
 
-    # Configurações do gráfico
-    plt.xticks(indices, image)
-    plt.xlabel('Colunas')
-    plt.ylabel('Valores')
-    plt.title('Comparação de Vetores por Coluna')
+    # Boxplot para Krill Herd
+    plt.boxplot(all_best.T, positions=indices + 0.2, widths=0.3,
+                patch_artist=True, boxprops=dict(facecolor='lightblue'), labels=[""]*len(indices))
+
+    # Marcadores para Otsu e PCA
+    plt.plot(indices, otsu_value, 'r*', label='OTSU', markersize=12)
+    plt.plot(indices, pca_value, 'bo', label='PCA', markersize=8, fillstyle='none')
+
+    plt.xticks(indices, image, rotation=45)
+    plt.xlabel('Imagens')
+    plt.ylabel('PRI')
+    plt.title('Comparação de PRI por imagem')
     plt.grid(alpha=0.3)
     plt.legend()
-
-    # Mostrar o gráfico
     plt.tight_layout()
-    plt.savefig("metricas.png")
+    plt.savefig("metricas_com_boxplot.png")
     plt.show()
         
 def main():
     POPULATION_SIZE = 10
     GENERATIONS = 15
     MUTATION_RATE = 0.08
+    EXECUTIONS = 5
     METRIC = rand_index
     dir_path = "dataset_folhas/"
     mask_paths = ["batata1_mask.png", "batata2_mask.png", "batata3_mask.png", "batata4_mask.png", "pimenta1_mask.png", "pimenta2_mask.png", "pimenta3_mask.png", "pimenta4_mask.png", "tomate1_mask.png", "tomate2_mask.png", "tomate3_mask.png", "tomate4_mask.png"]
@@ -186,72 +192,109 @@ def main():
     
     best_index_metrics = []
     for ip in range(len(mask_paths)):
-        ga = GeneticAlgorithm(population_size=POPULATION_SIZE, mutation_rate=MUTATION_RATE, image_path=dir_path+image_paths[ip], mask_path=dir_path+mask_paths[ip], metric = METRIC)
-        
-        print("="*60)
-        print(f"Iniciando Algoritmo Genético")
-        print(f"Tamanho da população: {POPULATION_SIZE}")
-        print(f"Número de gerações: {GENERATIONS}")
-        print(f"Taxa de mutação: {MUTATION_RATE}")
-        print("="*60)
-        
-        
-        for generation in range(GENERATIONS):
-            print(f"\n{'='*30} Geração {generation+1} {'='*30}")
+        metrics_for_executions = []
+        for i in range(EXECUTIONS):
+            ga = GeneticAlgorithm(population_size=POPULATION_SIZE, mutation_rate=MUTATION_RATE, image_path=dir_path+image_paths[ip], mask_path=dir_path+mask_paths[ip], metric = METRIC)
             
-        
-            fitness_scores = [ga.fitness_function(ind) for ind in ga.population]
-            
-            print("\nAvaliação de Fitness:")
-            for i, (ind, fit) in enumerate(zip(ga.population, fitness_scores)):
-                print(f"Indivíduo {i+1}: {ind} | Fitness: {fit} ({(fit/ga.chromosome_length)*100:.1f}% de 1's)")
-            
-        
-            best_idx = np.argmax(fitness_scores)
-            best_fitness = fitness_scores[best_idx]
-            best_individual = ga.population[best_idx]
-            
-            print(f"\nMelhor da geração: Indivíduo {best_idx+1}")
-            print(f"Fitness: {best_fitness} | Cromossomo: {best_individual}")
+            print("="*60)
+            print(f"Iniciando Algoritmo Genético")
+            print(f"Tamanho da população: {POPULATION_SIZE}")
+            print(f"Número de gerações: {GENERATIONS}")
+            print(f"Taxa de mutação: {MUTATION_RATE}")
+            print("="*60)
             
             
-            new_population = [best_individual.copy()] 
-            
-            while len(new_population) < POPULATION_SIZE:
-                parent1, parent2 = ga.selection(fitness_scores)
+            for generation in range(GENERATIONS):
+                print(f"\n{'='*30} Geração {generation+1} {'='*30}")
                 
-                child1, child2 = ga.crossover(parent1, parent2)
+            
+                fitness_scores = [ga.fitness_function(ind) for ind in ga.population]
                 
-                child1 = ga.mutation(child1)
-                child2 = ga.mutation(child2)
+                print("\nAvaliação de Fitness:")
+                for i, (ind, fit) in enumerate(zip(ga.population, fitness_scores)):
+                    print(f"Indivíduo {i+1}: {ind} | Fitness: {fit} ({(fit/ga.chromosome_length)*100:.1f}% de 1's)")
                 
-                new_population.extend([child1, child2])
             
-            ga.population = np.array(new_population[:POPULATION_SIZE])
+                best_idx = np.argmax(fitness_scores)
+                best_fitness = fitness_scores[best_idx]
+                best_individual = ga.population[best_idx]
+                
+                print(f"\nMelhor da geração: Indivíduo {best_idx+1}")
+                print(f"Fitness: {best_fitness} | Cromossomo: {best_individual}")
+                
+                
+                new_population = [best_individual.copy()] 
+                
+                while len(new_population) < POPULATION_SIZE:
+                    parent1, parent2 = ga.selection(fitness_scores)
+                    
+                    child1, child2 = ga.crossover(parent1, parent2)
+                    
+                    child1 = ga.mutation(child1)
+                    child2 = ga.mutation(child2)
+                    
+                    new_population.extend([child1, child2])
+                
+                ga.population = np.array(new_population[:POPULATION_SIZE])
+                
+                avg_fitness = np.mean(fitness_scores)
+                max_fitness = np.max(fitness_scores)
+                min_fitness = np.min(fitness_scores)
+                
+                print(f"\nEstatísticas da geração {generation+1}:")
+                print(f"Fitness médio: {avg_fitness:.2f}")
+                print(f"Fitness máximo: {max_fitness}")
+                print(f"Fitness mínimo: {min_fitness}")
             
-            avg_fitness = np.mean(fitness_scores)
-            max_fitness = np.max(fitness_scores)
-            min_fitness = np.min(fitness_scores)
+            final_fitness = [ga.fitness_function(ind) for ind in ga.population]
+            best_idx = np.argmax(final_fitness)
             
-            print(f"\nEstatísticas da geração {generation+1}:")
-            print(f"Fitness médio: {avg_fitness:.2f}")
-            print(f"Fitness máximo: {max_fitness}")
-            print(f"Fitness mínimo: {min_fitness}")
-        
-        final_fitness = [ga.fitness_function(ind) for ind in ga.population]
-        best_idx = np.argmax(final_fitness)
-        
-        print(ga.decode_chromosome(ga.population[best_idx]))
-        print("\n" + "="*60)
-        print("Resultado Final:")
-        print(f"Melhor indivíduo encontrado: {ga.population[best_idx]}")
-        print(f"Fitness do melhor: {final_fitness[best_idx]}")
-        print("="*60)
+            print(ga.decode_chromosome(ga.population[best_idx]))
+            print("\n" + "="*60)
+            print("Resultado Final:")
+            print(f"Melhor indivíduo encontrado: {ga.population[best_idx]}")
+            print(f"Fitness do melhor: {final_fitness[best_idx]}")
+            print("="*60)
 
-        best_index_metrics.append(final_fitness[best_idx])
-        cv2.imwrite(f"masks/{image_paths[ip]}_mask.jpg", ga.pipeline(ga.population[best_idx]))
-        cv2.imwrite("Original_Image.jpg", ga.image)
-        
-    compare_otsu_pca(image_paths, best_index_metrics, METRIC, mask_paths, dir_path)
+            metrics_for_executions.append(final_fitness[best_idx])
+            cv2.imwrite(f"masks/{image_paths[ip]}_mask.jpg", ga.pipeline(ga.population[best_idx]))
+            cv2.imwrite("Original_Image.jpg", ga.image)
+        best_index_metrics.append(metrics_for_executions)
+
+    limits = 1
+    n_iteracoes = 15
+
+
+    all_best_individuals = []
+    for ip in range(len(mask_paths)):
+        individuals_per_execution = []
+        for i in range(EXECUTIONS):
+            swarm = Swarm(15, limits, n_iteracoes, population_size=10,
+                        image_path=dir_path + image_paths[ip],
+                        mask_path=dir_path + mask_paths[ip],
+                        metric=METRIC)
+
+            x = 0
+            while x < n_iteracoes:
+                swarm.evaluate_fitness()
+                swarm.food_position()
+
+                for i in range(swarm.size):
+                    swarm.change_position(i, x, 0.1)
+
+                # Coleta do melhor indivíduo da iteração
+                best_krill = max(swarm.krills, key=lambda k: k.fitness)
+
+                x += 1
+
+            best_overall = max(swarm.krills, key=lambda k: k.fitness)
+            individuals_per_execution.append(best_overall)
+
+            print(f"Melhor fitness da imagem {image_paths[ip]}: {best_overall.fitness}")
+        all_best_individuals.append(individuals_per_execution)
+
+
+    print(np.array(best_index_metrics).shape, np.array(all_best_individuals).shape)
+    compare_otsu_pca(image_paths, best_index_metrics, all_best_individuals, METRIC, mask_paths, dir_path)
 if __name__ == "__main__":
     main()
