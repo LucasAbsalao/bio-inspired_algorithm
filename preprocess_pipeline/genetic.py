@@ -104,10 +104,10 @@ class GeneticAlgorithm:
     
 
     def mutation(self, child):
-        for i in range(len(child)):
             if np.random.rand() < self.mutation_rate:
-                child[i] = 1 - child[i]
-        return child
+                mutate_idx = np.random.randint(len(child))
+                child[mutate_idx] = 1 - child[mutate_idx]    
+            return child
     
     def crossover(self, parent1, parent2):
 
