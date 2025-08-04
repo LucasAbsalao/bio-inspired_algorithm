@@ -39,21 +39,26 @@ def local_refinement_error(img1: np.ndarray, img2: np.ndarray, masks1: dict, mas
         Sum of per-pixel refinement error from img1 to img2.
     """
     error = 0.0
-    H, W = img1.shape
 
-    for i in range(H):
-        for j in range(W):
-            label1 = img1[i, j]
-            label2 = img2[i, j]
+    # Get unique (label1, label2) pairs and how often they occur
+    pairs, counts = np.unique(
+        np.stack((img1.ravel(), img2.ravel()), axis=1),
+        axis=0,
+        return_counts=True
+    )
 
-            region1 = masks1[label1]
-            region2 = masks2[label2]
+    for (label1, label2), count in zip(pairs, counts):
+        region1 = masks1[label1]
+        region2 = masks2[label2]
 
-            diff = np.logical_and(region1, np.logical_not(region2))
-            region_size = np.count_nonzero(region1)
+        region_size = np.count_nonzero(region1)
+        if region_size == 0:
+            continue
 
-            if region_size > 0:
-                error += np.count_nonzero(diff) / region_size
+        diff = np.logical_and(region1, ~region2)
+        local_error = np.count_nonzero(diff) / region_size
+
+        error += count * local_error
 
     return error
 

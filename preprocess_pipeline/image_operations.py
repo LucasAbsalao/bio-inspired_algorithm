@@ -97,5 +97,7 @@ def segmentation(image, segmentation_type):
         
         pca_image = cv2.normalize(projected_image, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
         ret, bit_mask = cv2.threshold(pca_image,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        
+    
+    if np.sum(bit_mask==255)>np.sum(bit_mask==0):
+        bit_mask = 255 - bit_mask
     return bit_mask
