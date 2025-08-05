@@ -137,6 +137,9 @@ class GeneticAlgorithm:
             ri = 1/(1+self.metric(image, self.ground_truth))
         return ri 
 
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
+
 def compare_otsu_pca(image, best_ind_metric, all_best, metric, ground_truth, dir):
     otsu_value = []
     pca_value = []
@@ -151,20 +154,16 @@ def compare_otsu_pca(image, best_ind_metric, all_best, metric, ground_truth, dir
     best_ind_metric = np.array(best_ind_metric)  # shape: (n_imagens, execuções)
     all_best = np.array([[krill.fitness for krill in krill_list] for krill_list in all_best])  # shape: (n_imagens, execuções)
 
-    # Verifique tamanhos
-    #assert best_ind_metric.shape[0] == len(image), "Mismatch entre best_ind_metric e número de imagens"
-    #assert all_best.shape[0] == len(image), "Mismatch entre all_best e número de imagens"
-
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 6))
     indices = np.arange(len(image))
 
     # Boxplot para GA
-    plt.boxplot(best_ind_metric.T, positions=indices - 0.2, widths=0.3,
-                patch_artist=True, boxprops=dict(facecolor='lightgray'), labels=[""]*len(indices))
+    b1 = plt.boxplot(best_ind_metric.T, positions=indices - 0.2, widths=0.3,
+                     patch_artist=True, boxprops=dict(facecolor='lightgray'), labels=[""]*len(indices))
 
     # Boxplot para Krill Herd
-    plt.boxplot(all_best.T, positions=indices + 0.2, widths=0.3,
-                patch_artist=True, boxprops=dict(facecolor='lightblue'), labels=[""]*len(indices))
+    b2 = plt.boxplot(all_best.T, positions=indices + 0.2, widths=0.3,
+                     patch_artist=True, boxprops=dict(facecolor='lightblue'), labels=[""]*len(indices))
 
     # Marcadores para Otsu e PCA
     plt.plot(indices, otsu_value, 'r*', label='OTSU', markersize=12)
@@ -175,14 +174,105 @@ def compare_otsu_pca(image, best_ind_metric, all_best, metric, ground_truth, dir
     plt.ylabel('PRI')
     plt.title('Comparação de PRI por imagem')
     plt.grid(alpha=0.3)
-    plt.legend()
+
+    # Legenda dos boxplots
+    legend_elements = [
+        Patch(facecolor='lightgray', edgecolor='black', label='GA'),
+        Patch(facecolor='lightblue', edgecolor='black', label='KHA'),
+        plt.Line2D([0], [0], marker='*', color='r', linestyle='None', markersize=10, label='OTSU'),
+        plt.Line2D([0], [0], marker='o', color='b', linestyle='None', markersize=8, markerfacecolor='white', label='PCA')
+    ]
+    plt.legend(handles=legend_elements)
+
     plt.tight_layout()
     plt.savefig("metricas_com_boxplot.png")
     plt.show()
+
+def compare_otsu_pca_1(image, best_ind_metric, all_best, metric, ground_truth, dir):
+    otsu_value = []
+    pca_value = []
+
+    for i in range(len(image)):
+        otsu = segmentation(cv2.imread(dir + image[i]), 'otsu')
+        pca = segmentation(cv2.imread(dir + image[i]), 'pca')
+
+        otsu_value.append(metric(otsu, cv2.imread(dir + ground_truth[i], cv2.IMREAD_GRAYSCALE)))
+        pca_value.append(metric(pca, cv2.imread(dir + ground_truth[i], cv2.IMREAD_GRAYSCALE)))
+
+    best_ind_metric = np.array(best_ind_metric)  # shape: (n_imagens, execuções)
+    all_best = np.array([[krill.fitness for krill in krill_list] for krill_list in all_best])  # shape: (n_imagens, execuções)
+
+    plt.figure(figsize=(12, 6))
+    indices = np.arange(len(image))
+
+    # Boxplot para GA
+    b1 = plt.boxplot(best_ind_metric.T, positions=indices - 0.2, widths=0.3,
+                     patch_artist=True, boxprops=dict(facecolor='lightgray'), labels=[""]*len(indices))
+
+    # Boxplot para Krill Herd
+    b2 = plt.boxplot(all_best.T, positions=indices + 0.2, widths=0.3,
+                     patch_artist=True, boxprops=dict(facecolor='lightblue'), labels=[""]*len(indices))
+
+    plt.xticks(indices, image, rotation=45)
+    plt.xlabel('Imagens')
+    plt.ylabel('PRI')
+    plt.title('Comparação de PRI por imagem')
+    plt.grid(alpha=0.3)
+
+    # Legenda dos boxplots
+    legend_elements = [
+        Patch(facecolor='lightgray', edgecolor='black', label='GA'),
+        Patch(facecolor='lightblue', edgecolor='black', label='KHA'),
+    ]
+    plt.legend(handles=legend_elements)
+
+    plt.tight_layout()
+    plt.savefig("metricas_com_boxplot.png")
+    plt.show()
+
+def plot_fitness_evolution(fitness_ga, fitness_kha):
+    """
+    Plota a evolução da fitness média e desvio padrão para GA e KHA ao longo das gerações.
+    
+    Parâmetros:
+        fitness_ga: list[list[float]]
+            Lista com as fitness médias por geração para cada execução do GA.
+        fitness_kha: list[list[float]]
+            Lista com as fitness médias por geração para cada execução do KHA.
+    """
+    fitness_ga = np.array(fitness_ga)  # shape: (execuções, gerações)
+    fitness_kha = np.array(fitness_kha)
+
+    mean_ga = np.mean(fitness_ga, axis=0)
+    std_ga = np.std(fitness_ga, axis=0)
+
+    mean_kha = np.mean(fitness_kha, axis=0)
+    std_kha = np.std(fitness_kha, axis=0)
+
+    generations = np.arange(1, len(mean_ga) + 1)
+
+    plt.figure(figsize=(10, 5))
+
+    plt.plot(generations, mean_ga, label='GA - Fitness Média', color='gray')
+    plt.fill_between(generations, mean_ga - std_ga, mean_ga + std_ga, color='gray', alpha=0.2)
+
+    plt.plot(generations, mean_kha, label='KHA - Fitness Média', color='blue')
+    plt.fill_between(generations, mean_kha - std_kha, mean_kha + std_kha, color='blue', alpha=0.2)
+
+    plt.title('Evolução da Fitness Média por Geração')
+    plt.xlabel('Geração')
+    plt.ylabel('Fitness')
+    plt.grid(alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("evolucao_fitness_comparada.png")
+    plt.show()
+
+
         
 def main():
     POPULATION_SIZE = 10
-    GENERATIONS = 15
+    GENERATIONS = 20
     MUTATION_RATE = 0.08
     EXECUTIONS = 5
     METRIC = rand_index
@@ -203,12 +293,13 @@ def main():
             print(f"Taxa de mutação: {MUTATION_RATE}")
             print("="*60)
             
-            
+            genetic_fitness = []
             for generation in range(GENERATIONS):
                 print(f"\n{'='*30} Geração {generation+1} {'='*30}")
                 
             
                 fitness_scores = [ga.fitness_function(ind) for ind in ga.population]
+                genetic_fitness.append(fitness_scores)
                 
                 print("\nAvaliação de Fitness:")
                 for i, (ind, fit) in enumerate(zip(ga.population, fitness_scores)):
@@ -256,27 +347,32 @@ def main():
             print(f"Fitness do melhor: {final_fitness[best_idx]}")
             print("="*60)
 
+
             metrics_for_executions.append(final_fitness[best_idx])
             cv2.imwrite(f"masks/{image_paths[ip]}_mask.jpg", ga.pipeline(ga.population[best_idx]))
             cv2.imwrite("Original_Image.jpg", ga.image)
+        
         best_index_metrics.append(metrics_for_executions)
 
     limits = 1
-    n_iteracoes = 15
+    n_iteracoes = GENERATIONS
 
 
     all_best_individuals = []
     for ip in range(len(mask_paths)):
         individuals_per_execution = []
         for i in range(EXECUTIONS):
-            swarm = Swarm(15, limits, n_iteracoes, population_size=10,
+            swarm = Swarm(limits, n_iteracoes, population_size=10,
                         image_path=dir_path + image_paths[ip],
                         mask_path=dir_path + mask_paths[ip],
                         metric=METRIC)
 
             x = 0
+            kha_fitness = []
             while x < n_iteracoes:
                 swarm.evaluate_fitness()
+                fitness_scores = np.array([krill.fitness for krill in swarm.krills])
+                kha_fitness.append(fitness_scores)
                 swarm.food_position()
 
                 for i in range(swarm.size):
@@ -286,7 +382,6 @@ def main():
                 best_krill = max(swarm.krills, key=lambda k: k.fitness)
 
                 x += 1
-
             best_overall = max(swarm.krills, key=lambda k: k.fitness)
             individuals_per_execution.append(best_overall)
 
@@ -295,6 +390,9 @@ def main():
 
 
     print(np.array(best_index_metrics).shape, np.array(all_best_individuals).shape)
+    print(best_index_metrics, all_best_individuals)
     compare_otsu_pca(image_paths, best_index_metrics, all_best_individuals, METRIC, mask_paths, dir_path)
+    compare_otsu_pca_1(image_paths, best_index_metrics, all_best_individuals, METRIC, mask_paths, dir_path)
+    plot_fitness_evolution(genetic_fitness, kha_fitness)
 if __name__ == "__main__":
     main()

@@ -122,18 +122,17 @@ class Krill:
 
 
 class Swarm:
-    def __init__(self, size, limits, max_iterations, population_size=10, image=None, image_path=None, mask_path=None, metric = None):
+    def __init__(self, limits, max_iterations, population_size=10, image=None, image_path=None, mask_path=None, metric = None):
         self.selfs= []
         self.limits = limits
-        self.size = size
-        self.population_size = population_size
+        self.size = population_size
 
         self.image = cv2.imread(image_path)
         self.ground_truth = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
         self.metric = metric
 
         self.krills = []
-        for _ in range(size):
+        for _ in range(self.size):
             self.krills.append(Krill(-limits, limits, self.image, self.ground_truth, self.metric))
             
         self.kworst = np.inf
