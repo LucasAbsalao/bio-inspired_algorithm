@@ -259,7 +259,7 @@ def plot_fitness_evolution(fitness_ga, fitness_kha):
     plt.plot(generations, mean_kha, label='KHA - Fitness Média', color='blue')
     plt.fill_between(generations, mean_kha - std_kha, mean_kha + std_kha, color='blue', alpha=0.2)
 
-    plt.title('Evolução da Fitness Média por Geração')
+    plt.title('Evolução da Fitness Média por Geração na última imagem')
     plt.xlabel('Geração')
     plt.ylabel('Fitness')
     plt.grid(alpha=0.3)
@@ -393,6 +393,6 @@ def main():
     print(best_index_metrics, all_best_individuals)
     compare_otsu_pca(image_paths, best_index_metrics, all_best_individuals, METRIC, mask_paths, dir_path)
     compare_otsu_pca_1(image_paths, best_index_metrics, all_best_individuals, METRIC, mask_paths, dir_path)
-    plot_fitness_evolution(genetic_fitness, kha_fitness)
+    #plot_fitness_evolution(genetic_fitness, kha_fitness)
 if __name__ == "__main__":
     main()
